@@ -1,0 +1,1 @@
+for those of you wondering, cd stands for crash detection
