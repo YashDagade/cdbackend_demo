@@ -11,7 +11,9 @@
       "src": "/(.*\\.m3u8)",
       "headers": {
         "Content-Type": "application/vnd.apple.mpegurl",
-        "Access-Control-Allow-Origin": "*"
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Origin, Range"
       },
       "dest": "/public/$1"
     },
@@ -19,13 +21,20 @@
       "src": "/(.*\\.ts)",
       "headers": {
         "Content-Type": "video/mp2t",
-        "Access-Control-Allow-Origin": "*"
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Origin, Range"
       },
       "dest": "/public/$1"
     },
     {
       "src": "/(.*)",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Origin, Range"
+      },
       "dest": "/public/$1"
     }
   ]
-} 
+}
