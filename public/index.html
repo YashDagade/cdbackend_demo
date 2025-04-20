@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuous HLS Stream Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            margin-bottom: 10px;
+        }
+        a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .video-container {
+            margin: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        video {
+            width: 100%;
+            max-width: 640px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Crash Detection Video Streams</h1>
+    <p>This site hosts continuous HLS video streams for crash detection analysis.</p>
+    
+    <h2>Available Streams:</h2>
+    <ul>
+        <li><a href="/crash1/crash1.m3u8">Demo Crash Clip 1</a></li>
+        <li><a href="/crash2/crash2.m3u8">Demo Crash Clip 2</a></li>
+        <li><a href="/crash3/crash3.m3u8">Demo Crash Clip 3</a></li>
+        <li><a href="/crash4/crash4.m3u8">Demo Crash Clip 4</a></li>
+    </ul>
+
+    <div id="streams-container"></div>
+
+    <script>
+        // Load stream configuration
+        const streams = [
+            {
+                id: "demo_crash1",
+                url: "/demo_crash1/demo_crash1.m3u8",
+                location: "Demo Crash Clip 1"
+            },
+            {
+                id: "demo_crash2",
+                url: "/demo_crash2/demo_crash2.m3u8",
+                location: "Demo Crash Clip 2"
+            },
+            {
+                id: "demo_crash3",
+                url: "/demo_crash3/demo_crash3.m3u8",
+                location: "Demo Crash Clip 3"
+            },
+            {
+                id: "demo_crash4",
+                url: "/demo_crash4/demo_crash4.m3u8",
+                location: "Demo Crash Clip 4"
+            }
+        ];
+
+        function initializeStream(videoElement, streamUrl) {
+            if (Hls.isSupported()) {
+                const hls = new Hls({
+                    debug: false,
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                });
+                
+                hls.loadSource(streamUrl);
+                hls.attachMedia(videoElement);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    videoElement.play().catch(e => console.log("Playback failed:", e));
+                });
+
+                // Handle end of video for looping
+                videoElement.addEventListener('ended', () => {
+                    videoElement.currentTime = 0;
+                    videoElement.play().catch(e => console.log("Replay failed:", e));
+                });
+
+                // Handle errors
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.log("Network error, trying to recover...");
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.log("Media error, trying to recover...");
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                console.log("Fatal error, destroying player...");
+                                hls.destroy();
+                                break;
+                        }
+                    }
+                });
+            } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+                // For Safari
+                videoElement.src = streamUrl;
+                videoElement.addEventListener('loadedmetadata', () => {
+                    videoElement.play().catch(e => console.log("Playback failed:", e));
+                });
+            }
+        }
+
+        // Create video elements for each stream
+        const container = document.getElementById('streams-container');
+        streams.forEach(stream => {
+            const videoContainer = document.createElement('div');
+            videoContainer.className = 'video-container';
+            
+            const title = document.createElement('h3');
+            title.textContent = stream.location;
+            
+            const video = document.createElement('video');
+            video.id = stream.id;
+            video.controls = true;
+            video.muted = true;
+            video.autoplay = true;
+            video.playsInline = true;
+            
+            videoContainer.appendChild(title);
+            videoContainer.appendChild(video);
+            container.appendChild(videoContainer);
+            
+            initializeStream(video, stream.url);
+        });
+    </script>
+</body>
+</html> 
