@@ -149,31 +149,86 @@
 
         function initializeStream(videoElement, streamUrl, isLive = false) {
             if (Hls.isSupported()) {
-                const hls = new Hls({
+                const hlsConfig = isLive ? {
                     debug: false,
                     enableWorker: true,
-                    lowLatencyMode: isLive,
-                    maxBufferLength: isLive ? 10 : 30,
-                    maxMaxBufferLength: isLive ? 20 : 60,
-                });
+                    lowLatencyMode: false, // Set to false for better stability with live streams
+                    liveBackBufferLength: 0,
+                    liveSyncDurationCount: 3,
+                    liveMaxLatencyDurationCount: 10,
+                    maxBufferLength: 60,
+                    maxMaxBufferLength: 120,
+                    maxBufferSize: 60 * 1000 * 1000,
+                    maxBufferHole: 0.5,
+                    highBufferWatchdogPeriod: 2,
+                    nudgeOffset: 0.1,
+                    nudgeMaxRetry: 3,
+                    maxSeekHole: 2,
+                    seekHoleNudgeDuration: 0.01,
+                    maxFragLookUpTolerance: 0.25,
+                    liveDurationInfinity: true,
+                    liveBackBufferLength: 0,
+                    backBufferLength: 90
+                } : {
+                    debug: false,
+                    enableWorker: true,
+                    lowLatencyMode: false,
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 60,
+                };
+
+                const hls = new Hls(hlsConfig);
                 
                 hls.loadSource(streamUrl);
                 hls.attachMedia(videoElement);
                 
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    console.log(`Manifest parsed for ${streamUrl}${isLive ? ' (LIVE)' : ''}`);
                     videoElement.play().catch(e => console.log("Playback failed:", e));
                 });
 
-                // Handle end of video for looping (mainly for demo videos)
-                if (!isLive) {
+                // For live streams, handle playlist updates and maintain continuous playback
+                if (isLive) {
+                    hls.on(Hls.Events.LEVEL_UPDATED, (event, data) => {
+                        console.log(`Level updated for ${streamUrl}, segments: ${data.details.segments.length}`);
+                    });
+                    
+                    // Prevent the video from pausing on live streams
+                    videoElement.addEventListener('pause', () => {
+                        if (isLive && !videoElement.ended) {
+                            console.log(`Live stream paused, resuming playback for ${streamUrl}`);
+                            videoElement.play().catch(e => console.log("Resume failed:", e));
+                        }
+                    });
+
+                    // Handle stalling for live streams
+                    videoElement.addEventListener('stalled', () => {
+                        console.log(`Live stream stalled, attempting recovery for ${streamUrl}`);
+                        if (hls.media && hls.media.readyState > 0) {
+                            hls.startLoad();
+                        }
+                    });
+
+                    // Handle waiting (buffering) events
+                    videoElement.addEventListener('waiting', () => {
+                        console.log(`Live stream waiting/buffering for ${streamUrl}`);
+                    });
+
+                    videoElement.addEventListener('canplay', () => {
+                        console.log(`Live stream can play for ${streamUrl}`);
+                    });
+                } else {
+                    // Handle end of video for looping (demo videos only)
                     videoElement.addEventListener('ended', () => {
                         videoElement.currentTime = 0;
                         videoElement.play().catch(e => console.log("Replay failed:", e));
                     });
                 }
 
-                // Handle errors with retry logic
+                // Enhanced error handling with retry logic
                 hls.on(Hls.Events.ERROR, (event, data) => {
+                    console.log(`HLS Error for ${streamUrl}:`, data);
+                    
                     if (data.fatal) {
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
@@ -189,17 +244,20 @@
                             default:
                                 console.log(`Fatal error for ${streamUrl}, recreating player...`);
                                 hls.destroy();
-                                // Retry after 5 seconds for live streams
+                                // Retry after 3 seconds for live streams
                                 if (isLive) {
                                     setTimeout(() => {
+                                        console.log(`Retrying live stream: ${streamUrl}`);
                                         initializeStream(videoElement, streamUrl, isLive);
-                                    }, 5000);
+                                    }, 3000);
                                 }
                                 break;
                         }
                     }
                 });
 
+                // Store HLS instance for debugging
+                videoElement.hlsInstance = hls;
                 return hls;
             } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
                 // For Safari
@@ -207,6 +265,15 @@
                 videoElement.addEventListener('loadedmetadata', () => {
                     videoElement.play().catch(e => console.log("Playback failed:", e));
                 });
+                
+                // For live streams on Safari, handle continuous playback
+                if (isLive) {
+                    videoElement.addEventListener('pause', () => {
+                        if (!videoElement.ended) {
+                            videoElement.play().catch(e => console.log("Safari resume failed:", e));
+                        }
+                    });
+                }
             }
         }
 
@@ -231,6 +298,13 @@
             video.muted = true;
             video.autoplay = true;
             video.playsInline = true;
+            
+            // Additional attributes for live streams
+            if (isLive) {
+                video.setAttribute('webkit-playsinline', 'true');
+                video.setAttribute('playsinline', 'true');
+                video.preload = 'none';
+            }
             
             videoContainer.appendChild(title);
             videoContainer.appendChild(video);
